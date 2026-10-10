@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Appmaz Audio">
+<meta name="referrer" content="no-referrer">
+<title>Appmaz Audio</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icon-180.png">
+<link rel="icon" href="./icon-192.png">
+<link rel="stylesheet" href="./style.css">
+<script type="module" src="./app.js"></script>
+</head>
+<body>
+<main id="settings">
+  <header><span class="eyebrow">AUDIO · LISTAS · RESPUESTAS</span><h1>Appmaz Audio<span>.</span></h1><p>Elige una lista. El resto empieza con WIKISTOP.</p></header>
+  <section aria-labelledby="accountTitle">
+    <h2 id="accountTitle">Tu configuración</h2>
+    <div class="columns">
+      <div><label for="userCode">Código de usuario</label><input id="userCode" maxlength="3" pattern="[A-Za-z]{3}" placeholder="ABC" autocomplete="off" autocapitalize="characters" spellcheck="false"><small>Tres letras. Se guarda en este dispositivo.</small></div>
+      <div><label for="apiKey">API key de OpenAI</label><input id="apiKey" type="password" placeholder="sk-…" autocomplete="off" spellcheck="false"><small>Se conserva localmente, como en la app original.</small></div>
+    </div>
+    <label for="stopPhrase">Frase de detención</label><input id="stopPhrase" placeholder="parar transcripción">
+    <label for="delay">Latencia / precisión</label><select id="delay"><option value="minimal">Minimal · más rápido</option><option value="low">Low · rápido</option><option value="medium">Medium · equilibrado</option><option value="high">High · más precisión</option><option value="xhigh">XHigh · máxima precisión</option></select>
+  </section>
+  <section aria-labelledby="listsTitle">
+    <div class="section-head"><h2 id="listsTitle">Tus listas</h2><button id="newList" class="secondary">+ Nueva lista</button></div>
+    <p class="hint">Cada lista tiene su propio prompt. Pulsa «Usar lista» para entrar en la pantalla negra.</p>
+    <div id="lists"></div>
+    <form id="editor" hidden>
+      <h3 id="editorTitle">Nueva lista</h3>
+      <label for="listName">Nombre</label><input id="listName" required maxlength="100" placeholder="Por ejemplo, Profesiones">
+      <label for="listPrompt">Prompt de esta lista</label><textarea id="listPrompt" required placeholder="Lee la transcripción y devuelve únicamente…"></textarea>
+      <div class="actions"><button type="submit">Guardar lista</button><button type="button" id="cancelEdit" class="secondary">Cancelar</button></div>
+    </form>
+  </section>
+  <p id="status" role="status" aria-live="polite">Listo para configurar.</p>
+  <section id="pendingPanel" hidden><h2>Respuesta pendiente de envío</h2><p id="pendingInfo"></p><pre id="pendingText"></pre><div class="actions"><button id="retrySend">Reintentar envío</button><button id="discardPending" class="secondary">Descartar</button></div></section>
+  <details><summary>Última sesión</summary><h3>Transcripción</h3><pre id="transcript">—</pre><h3>Respuesta</h3><pre id="response">—</pre><h3>Estado</h3><pre id="log">Todavía no hay actividad.</pre></details>
+  <details><summary>Instalar en el móvil</summary><p>Abre esta web por HTTPS. En iPhone: Safari → Compartir → Añadir a pantalla de inicio. En Android: menú de Chrome → Instalar aplicación o Añadir a pantalla de inicio.</p><p>Mantén la app abierta. La pantalla negra es parte de la app; no bloquea el teléfono. Para volver, mantén pulsado el botón durante dos segundos.</p><p>El navegador decide si recuerda el permiso de micrófono. Mientras esperas, la pista de audio permanece desactivada; el sistema puede seguir mostrando su indicador de micrófono.</p></details>
+  <footer>Guardado en este dispositivo · Necesita conexión a Internet</footer>
+</main>
+<div id="blackScreen" hidden role="dialog" aria-modal="true" aria-label="Sesión de audio. Mantén Volver pulsado dos segundos para salir.">
+  <p id="listeningLabel" hidden role="status">Escuchando</p>
+  <button id="backBtn" aria-label="Volver: mantener pulsado dos segundos">Volver <span>mantén 2 segundos</span></button>
+</div>
+</body>
+</html>

@@ -1,94 +1,89 @@
-APPMAZ AUDIO — INSTALACIÓN Y USO
+APPMAZ AUDIO TÁCTIL V2 — ENVÍO DIRECTO Y SELECTOR DE MODELO
 
-1. Sube TODOS los archivos de esta carpeta a una carpeta de tu servidor HTTPS,
-   por ejemplo https://appmaz.vip/audio/. Abre index.html desde esa dirección.
-   No basta con abrir el HTML descargado ni con subir únicamente index.html.
-   Sirve .mjs como text/javascript y .webmanifest como application/manifest+json.
+INSTALACIÓN
+Sube todos los archivos de esta carpeta a una carpeta HTTPS distinta de la versión
+anterior, por ejemplo https://appmaz.vip/audio-tactil/. Abre index.html.
+No basta con abrir el HTML descargado ni con subir únicamente index.html.
+En iPhone: Safari > Compartir > Añadir a pantalla de inicio.
+En Android: Chrome > Instalar aplicación / Añadir a pantalla de inicio.
 
-2. En iPhone, abre la dirección con Safari y usa Compartir > Añadir a pantalla
-   de inicio. En Android, usa Chrome > Instalar aplicación / Añadir a pantalla
-   de inicio. La instalación y sus menús dependen de la versión del navegador.
+USO
+1. Introduce tu código exacto de tres letras y la API key de OpenAI.
+2. Configura la frase de detención, elige el modelo de lenguaje y crea listas con nombre y prompt.
+3. Pulsa Usar lista. Aparece la pantalla negra y se pide permiso de micrófono
+   si hace falta. El micrófono queda desactivado: no se inicia la escucha.
+4. Mantén un dedo quieto en la pantalla negra durante UN SEGUNDO. Un toque
+   corto, un desplazamiento o una pulsación en Volver no inicia la escucha.
+5. Espera a que aparezca Escuchando antes de hablar. Puede haber unos segundos
+   de conexión con OpenAI después de mantener pulsado.
+6. Di la frase de detención para terminar. El audio se detiene, el modelo analiza
+   la transcripción con el prompt seleccionado y la respuesta final aparece
+   en la pantalla negra. No se muestra allí la transcripción.
+7. La respuesta también se envía por GET a Appmaz. Permanece visible hasta
+   iniciar otra escucha o salir. Para otra escucha, mantén de nuevo un segundo.
+8. Mantén Volver DOS SEGUNDOS para salir. Se apaga por completo el micrófono.
 
-3. Introduce el código exacto de tres letras, tu API key, la frase de detención
-   y una o varias listas. Cada lista tiene nombre y prompt. Todo se guarda
-   localmente en ese navegador/origen; no se sincroniza entre dispositivos.
-   Se respetan mayúsculas/minúsculas del código. En el mismo origen se importa
-   el prompt y los ajustes del HTML original, si aún están guardados allí.
+QUÉ SE ENVÍA Y CUÁNDO
+- Al entrar en la pantalla negra: NO se consulta ni se escribe en la API de
+  Appmaz, ni se abre una conexión con OpenAI. Se gestiona el permiso local.
+- No se consulta WIKISTOP: esta versión solo se activa con la pulsación.
+- Tras la pulsación de un segundo: se conecta con OpenAI; el audio se activa
+  cuando el canal está listo. La etiqueta Escuchando refleja ese momento.
+- Tras la frase de detención: se manda la transcripción y el prompt a OpenAI.
+- Al recibir la respuesta final: se muestra en pantalla y se envía a
+  https://appmaz.vip/api/storedata.php?user=CODIGO&data=RESPUESTA
+  Los parámetros se codifican para conservar tildes, espacios y símbolos.
+- Al tener la respuesta, se envía directamente a storedata.php sin leer antes.
+  Después se consulta getdata.php. Si no coincide, se reenvía cada segundo
+  durante un máximo de diez segundos (hasta diez intentos, incluido el inicial).
+  Se detienen los reintentos en cuanto se confirma el resultado. Los reintentos
+  solo repiten el GET de Appmaz: NO vuelven a llamar al modelo de lenguaje.
+  No hay consultas mientras espera una pulsación ni hace falta WIKISTOP.
 
-4. Pulsa Usar lista y permite el micrófono. Queda una pantalla negra con Volver.
-   La app consulta getdata.php cada segundo (después de terminar cada petición).
-   Al recibir WIKISTOP conecta con OpenAI y activa el audio. Aparece Escuchando
-   únicamente cuando el canal está abierto y la pista de audio está activada.
-   Puede haber unos segundos de conexión entre la orden y Escuchando.
+Si falla el envío, el resultado sigue visible. También se guarda como pendiente
+localmente. Mantén Volver dos segundos para revisar el error y reintentar.
+No uses simultáneamente esta versión y la versión WIKISTOP con el mismo código:
+ambas escriben en el mismo campo remoto. La respuesta WIKISTOP ya no tiene un
+significado especial en esta versión táctil.
 
-5. Di la frase de detención al terminar. Se excluye esa frase y lo que venga
-   después; solo la respuesta final de gpt-5-nano se envía por GET:
-   https://appmaz.vip/api/storedata.php?user=CODIGO&data=RESPUESTA
-   Los parámetros se codifican para admitir espacios, tildes y símbolos.
-   El audio se transcribe con gpt-realtime-whisper, como en el archivo original.
+CONFIGURACIÓN
+Las listas y la configuración de la versión anterior se importan una vez si
+están guardadas en el mismo origen. Después se guardan de forma independiente.
+Las respuestas pendientes de la versión anterior no se importan ni se alteran.
+Cambiar de dominio/navegador no transfiere automáticamente los datos.
 
-6. Después del envío se comprueba que getdata.php devuelve la respuesta y se
-   espera otro WIKISTOP. No hay que volver a elegir la lista entre ciclos.
-   Mantén Volver dos segundos para salir y apagar el micrófono completamente.
-   Una pulsación corta no sale. Al volver puedes ver transcripción, respuesta
-   y los últimos estados. Si hubo un fallo, revisa aquí su descripción.
+REQUISITOS Y LÍMITES
+Usa HTTPS, Internet y la app abierta con el teléfono desbloqueado.
+El navegador decide si recuerda el permiso de micrófono. La pista se mantiene
+DESACTIVADA entre escuchas para reutilizar el permiso. El sistema puede seguir
+mostrando su indicador de micrófono. Al salir se detienen las pistas.
+Se solicita mantener la pantalla encendida si el navegador lo permite.
+Si la app deja de estar en primer plano durante la escucha, el audio se detiene.
 
-API DE APPMAZ
+Para evitar CORS, aloja esta carpeta en https://appmaz.vip. Si la alojas en
+GitHub Pages u otro dominio, las APIs de Appmaz deben permitir ese origen.
+getdata.php acepta texto plano, una cadena JSON o un objeto con data/text/content.
+Los límites de longitud de URL del servidor se aplican al envío GET.
+La API key no está incluida en los archivos; se introduce y guarda en el navegador.
+La conexión de audio se conserva. El selector permite GPT-5 Nano con razonamiento
+mínimo o GPT-4.1 mini sin parámetros de razonamiento. La elección se guarda.
+En Última sesión se registran el tiempo del modelo y el del envío por separado.
+La velocidad real depende del prompt, la carga del servicio y la conexión.
 
-- Lectura: https://appmaz.vip/api/getdata.php?user=CODIGO
-  Se agrega un parámetro de tiempo para evitar respuestas antiguas de caché.
-- Acepta texto plano, una cadena JSON o un objeto con data, text o content
-  de tipo texto. Una respuesta JSON desconocida o un error HTML no activa nada.
-- WIKISTOP se reconoce sin distinguir mayúsculas, con espacios exteriores
-  ignorados. Debe ser el contenido completo, no aparecer dentro de otra frase.
-- El servidor debe devolver la respuesta guardada sin añadir texto y permitir
-  GET con los caracteres codificados de la respuesta. Los límites de longitud
-  de URL del servidor siguen aplicando; no se truncan resultados silenciosamente.
-- Para evitar CORS, aloja la app en https://appmaz.vip. Si usas otro dominio,
-  getdata.php y storedata.php deben permitir ese origen mediante sus cabeceras
-  CORS. No se usa no-cors, porque impediría leer órdenes y verificar el envío.
-- Una misma orden no se ejecuta repetidamente: se recuerda localmente que ya
-  se atendió. En caso de error, la pantalla negra se mantiene hasta pulsar Volver.
-  Una respuesta pendiente se conserva localmente y ofrece Reintentar envío.
-  Antes de reenviar se comprueba si ya está guardada para evitar repetirlo.
-- No envíes otro WIKISTOP hasta que aparezca el resultado anterior en la API.
-  Con un único campo de texto, sin ID de orden, no se puede distinguir una orden
-  repetida de otra nueva idéntica si se reemplaza antes de poder comprobarla.
-  Usa un solo dispositivo activo por código. La respuesta final WIKISTOP está
-  reservada: no se envía porque sería indistinguible de una orden de inicio.
-- Si sales o falla el audio antes de tener un resultado, el WIKISTOP consumido
-  no se repite. Cambia el valor remoto a otro texto, deja que la app lo lea en
-  espera y luego envía una nueva orden WIKISTOP.
+COMPROBACIONES
+Pruebas simuladas superadas: ninguna petición al entrar, pista desactivada,
+pulsación de un segundo, toques cortos, cancelación/movimiento/multitáctil,
+Volver independiente de dos segundos, dos ciclos consecutivos, solo respuesta
+final en el GET, resultado visible incluso si falla el envío, cancelación al
+salir y gestión de permiso denegado. Sintaxis JavaScript verificada.
+No se ha verificado esta versión con un micrófono real, las APIs reales ni
+con teléfonos físicos. El archivo original y la versión WIKISTOP se conservan.
 
-MICRÓFONO Y MÓVIL
+ACTUALIZAR DESDE LA VERSIÓN TÁCTIL ANTERIOR
+Sustituye TODOS los archivos de la carpeta por los de este ZIP. Cierra y vuelve
+a abrir la app para activar la nueva caché. Las listas y ajustes se conservan.
+Si no ves el selector Modelo de lenguaje, recarga la web y vuelve a abrirla.
 
-La pista de audio se conserva DESACTIVADA mientras espera. No se conecta con
-OpenAI hasta recibir WIKISTOP. El teléfono puede mostrar su indicador de
-micrófono por mantener el permiso abierto. Al volver se detienen todas las pistas.
-El navegador decide cuánto dura el permiso: la web no puede garantizar que nunca
-vuelva a pedirlo. Si hace falta, se solicita al elegir una lista.
-
-Mantén la app abierta y el teléfono desbloqueado. Se solicita mantener la pantalla
-encendida cuando el navegador lo admite; el sistema puede denegarlo. Si la app
-sale de primer plano mientras escucha, el audio se interrumpe y hay que volver
-y elegir la lista. El botón solo controla la salida dentro de la app; no impide
-cerrarla ni usar los controles del sistema. Se necesita Internet para funcionar.
-
-La API key permanece en el navegador como en el original: no se incluye ninguna
-clave en los archivos entregados. Solo se manda a api.openai.com. Los prompts
-y la transcripción se mandan a OpenAI; appmaz.vip recibe únicamente el resultado.
-
-VERIFICACIÓN
-
-Comprobaciones automáticas con micrófono, WebRTC y APIs simulados: dos ciclos
-completos, órdenes duplicadas, parámetros GET y texto final, listas independientes,
-frase de detención, micrófono desactivado en espera, salida larga/corta, errores
-de permiso, respuesta pendiente y etiqueta Escuchando. Sintaxis JS comprobada.
-No se ha probado con tu API key, tu servidor real ni teléfonos físicos.
-La previsualización del navegador no pudo acceder al servidor local debido
-a restricciones de conexión del entorno de trabajo.
-
-Referencias consultadas:
-https://developers.openai.com/api/docs/guides/realtime-transcription
-https://developers.openai.com/api/docs/models/gpt-realtime-whisper
-https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia
+Comprobaciones adicionales de V2: envío inicial antes de leer, reintentos cada
+segundo, parada al confirmar, plazo máximo de diez segundos, peticiones lentas,
+cancelación al salir y parámetros correctos para ambos modelos.

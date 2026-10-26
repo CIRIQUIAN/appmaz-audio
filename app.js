@@ -1,8 +1,10 @@
-import {parseRemote, isCommand, CommandGate, beforeStop, apiURL, extractAnswer} from './core.mjs';
+import {parseRemote, beforeStop, apiURL, extractAnswer, confirmDelivery} from './core.mjs';
 
 const $ = id => document.getElementById(id);
-const STORAGE = 'appmaz_audio_v1';
+const STORAGE = 'appmaz_audio_touch_v1';
+const PENDING_STORAGE = 'appmaz_pending_touch_v1';
 let config, session = null, editing = null, holdTimer = null, logLines = [];
+let startHold = null;
 let pending = null, sendingPending = false;
 const read = key => localStorage.getItem(key);
 function save() { localStorage.setItem(STORAGE, JSON.stringify(config)); }
@@ -29,8 +31,8 @@ function showPending() {
 function keepPending(value) {
   // Retain the in-memory copy even if the browser runs out of storage.
   pending = value;
-  if (value) localStorage.setItem('appmaz_pending_v1', JSON.stringify(value));
-  else localStorage.removeItem('appmaz_pending_v1');
+  if (value) localStorage.setItem(PENDING_STORAGE, JSON.stringify(value));
+  else localStorage.removeItem(PENDING_STORAGE);
   showPending();
 }
 function saveSettings() {
@@ -38,6 +40,7 @@ function saveSettings() {
   config.key = $('apiKey').value.trim();
   config.stop = $('stopPhrase').value.trim();
   config.delay = $('delay').value;
+  config.model = $('languageModel').value;
   save();
 }
 function renderLists() {
@@ -85,7 +88,8 @@ function closeRTC(s) {
 }
 function fail(s, error) {
   if (!current(s)) return;
-  s.state = 'error'; closeRTC(s);
+  s.state = 'error'; cancelStartHold(); closeRTC(s);
+  $('screenMessage').textContent = errorText(error) + ' Mantén Volver 2 segundos para revisar.';
   status(errorText(error) + ' Mantén Volver 2 segundos para revisar.');
 }
 async function request(url, options = {}, s = null, timeout = 20000) {
@@ -126,11 +130,18 @@ async function enter(list) {
     if (!list.prompt.trim()) throw new Error('Esta lista necesita un prompt.');
     if (pending) throw new Error('Envía o descarta primero la respuesta pendiente.');
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) throw new Error('Abre la app por HTTPS para usar el micrófono.');
-    const gateKey = 'appmaz_consumed_' + config.user;
-    s = {user: config.user, key: config.key, stop: config.stop, delay: config.delay,
+    if (!['gpt-5-nano', 'gpt-4.1-mini'].includes(config.model)) throw new Error('Selecciona un modelo de lenguaje válido.');
+    s = {user: config.user, key: config.key, stop: config.stop, delay: config.delay, model:config.model,
       list: {...list}, state: 'permission', controller: new AbortController(),
-      gateKey, gate: new CommandGate(read(gateKey) === '1'), items: new Map()};
+      items: new Map()};
     session = s; renderLists();
+    $('editor').hidden = true; $('settings').hidden = true; $('settings').inert = true;
+    $('blackScreen').hidden = false; document.body.classList.add('active-session');
+    $('blackResult').textContent = ''; $('blackResult').hidden = true;
+    $('listeningLabel').hidden = true;
+    $('screenMessage').textContent = 'Preparando micrófono…';
+    history.pushState({appmazSession:true}, ''); s.history = true;
+    $('startSurface').focus();
     status('Preparando permiso de micrófono…');
     // Acquire from the list click; retain a disabled track between cycles.
     const stream = await navigator.mediaDevices.getUserMedia({audio: {echoCancellation:true, noiseSuppression:true, autoGainControl:true}});
@@ -138,43 +149,22 @@ async function enter(list) {
     if (!current(s)) { stream.getTracks().forEach(t => t.stop()); return; }
     s.stream = stream;
     stream.getAudioTracks().forEach(t => t.addEventListener('ended', () => fail(s, new Error('El micrófono se ha desconectado. Vuelve a elegir la lista.'))));
-    $('editor').hidden = true; $('settings').hidden = true; $('settings').inert = true;
-    $('blackScreen').hidden = false; document.body.classList.add('active-session');
-    history.pushState({appmazSession:true}, ''); s.history = true;
-    $('backBtn').focus();
-    s.state = 'waiting'; status('Esperando WIKISTOP · ' + list.name);
-    void wake(s); void poll(s);
+    s.state = 'waiting'; $('screenMessage').textContent = '';
+    status('Mantén la pantalla negra pulsada 1 segundo para escuchar · ' + list.name);
+    void wake(s);
   } catch (error) {
     if (s && current(s)) exitSession();
     status(errorText(error));
   }
 }
-async function poll(s) {
-  if (!current(s)) return;
-  try {
-    if (s.state === 'waiting' && document.visibilityState === 'visible') {
-      const value = parseRemote(await request(apiURL('/api/getdata.php', s.user), {}, s));
-      if (!current(s) || s.state !== 'waiting') return;
-      const trigger = s.gate.observe(value);
-      localStorage.setItem(s.gateKey, s.gate.consumed ? '1' : '0');
-      if (trigger) await startAudio(s);
-      else status(value && isCommand(value) ? 'Orden anterior ya atendida. Esperando que cambie el contenido remoto.' : 'Esperando WIKISTOP · ' + s.list.name);
-    }
-  } catch (error) {
-    if (current(s)) {
-      if (s.state !== 'waiting') fail(s, error);
-      else status(errorText(error) + ' Se volverá a consultar.');
-    }
-  } finally {
-    if (current(s)) s.pollTimer = setTimeout(() => void poll(s), 1000);
-  }
-}
 async function startAudio(s) {
   if (!current(s) || s.state !== 'waiting') return;
   s.state = 'connecting'; s.items.clear();
+  $('blackResult').textContent = ''; $('blackResult').hidden = true;
+  $('screenMessage').textContent = 'Conectando…';
   $('transcript').textContent = ''; $('response').textContent = '';
   if (!s.stream.getAudioTracks().some(t => t.readyState === 'live')) throw new Error('El micrófono ya no está disponible. Vuelve a elegir la lista.');
-  status('WIKISTOP recibido. Conectando audio…');
+  status('Pulsación recibida. Conectando audio…');
   const pc = new RTCPeerConnection(); s.pc = pc;
   s.stream.getTracks().forEach(t => pc.addTrack(t, s.stream));
   const dc = pc.createDataChannel('oai-events'); s.dc = dc;
@@ -184,6 +174,7 @@ async function startAudio(s) {
     clearTimeout(s.connectTimer); s.state = 'listening';
     s.stream.getAudioTracks().forEach(t => { t.enabled = true; });
     $('listeningLabel').hidden = false;
+    $('screenMessage').textContent = '';
     status('Escuchando · ' + s.list.name);
   };
   dc.onmessage = event => {
@@ -222,47 +213,56 @@ async function startAudio(s) {
 async function finish(s, transcript) {
   if (!current(s) || s.state !== 'listening') return;
   s.state = 'processing'; closeRTC(s);
+  $('screenMessage').textContent = 'Procesando…';
   try {
     if (!transcript.trim()) throw new Error('No hay contenido antes de la frase de detención.');
-    status('Analizando con el prompt de ' + s.list.name + '…');
+    const modelStart = Date.now();
+    status('Analizando con ' + s.model + ' y el prompt de ' + s.list.name + '…');
     const raw = await request('https://api.openai.com/v1/responses', {
       method:'POST', headers:{Authorization:'Bearer ' + s.key,'Content-Type':'application/json'},
-      body:JSON.stringify({model:'gpt-5-nano',input:[
+      body:JSON.stringify({model:s.model,...(s.model === 'gpt-5-nano' ? {reasoning:{effort:'minimal'}} : {}),input:[
         {role:'system',content:[{type:'input_text',text:s.list.prompt}]},
         {role:'user',content:[{type:'input_text',text:'TRANSCRIPCIÓN:\n\n' + transcript}]}
       ]})
     }, s, 120000);
     if (!current(s)) return;
     const answer = extractAnswer(JSON.parse(raw)); $('response').textContent = answer;
+    status('Respuesta del modelo en ' + ((Date.now() - modelStart) / 1000).toFixed(1) + ' s.');
+    // Display independently of Appmaz availability; never interpret model text as HTML.
+    $('blackResult').textContent = answer; $('blackResult').hidden = false;
+    $('blackResult').scrollTop = 0;
+    $('screenMessage').textContent = 'Enviando resultado…';
     keepPending({user:s.user, answer, createdAt:new Date().toISOString()});
     s.state = 'sending'; status('Enviando la respuesta final…');
     await deliver(pending, s);
     if (!current(s)) return;
     keepPending(null);
-    // A verified read-back observed the replacement, so the next WIKISTOP is new.
-    s.gate = new CommandGate(false); localStorage.setItem(s.gateKey, '0');
-    s.state = 'waiting'; status('Respuesta enviada. Esperando otro WIKISTOP.');
+    s.state = 'waiting'; $('screenMessage').textContent = '';
+    status('Respuesta enviada. Mantén la pantalla pulsada 1 segundo para otra escucha.');
   } catch (error) { fail(s, error); }
 }
 async function deliver(item, s = null) {
-  if (isCommand(item.answer)) throw new Error('La respuesta es WIKISTOP, que está reservado como orden de inicio. Cambia el prompt para evitar esa respuesta.');
-  // A previous request may have succeeded even if its response was lost.
-  const existing = parseRemote(await request(apiURL('/api/getdata.php', item.user), {}, s));
-  if (existing === item.answer) return;
-  if (!isCommand(existing)) throw new Error('El contenido remoto ha cambiado. No se sobrescribió. Revisa la respuesta pendiente.');
-  await request(apiURL('/api/storedata.php', item.user, item.answer), {method:'GET'}, s);
-  const saved = parseRemote(await request(apiURL('/api/getdata.php', item.user), {}, s));
-  if (saved !== item.answer) throw new Error('No se pudo confirmar el resultado guardado. La respuesta queda pendiente; vuelve para revisarla.');
+  const started = Date.now();
+  await confirmDelivery(item.answer, {
+    signal:s?.controller.signal,
+    write:signal => request(apiURL('/api/storedata.php', item.user, item.answer), {method:'GET'}, {controller:{signal}}, 10000),
+    read:async signal => parseRemote(await request(apiURL('/api/getdata.php', item.user), {}, {controller:{signal}}, 10000)),
+    onAttempt:number => {
+      if (s && current(s)) $('screenMessage').textContent = number === 1 ? 'Enviando resultado…' : 'Comprobando envío · intento ' + number;
+    }
+  });
+  status('Resultado guardado y comprobado en ' + ((Date.now() - started) / 1000).toFixed(1) + ' s.');
 }
 function cancelHold() { clearTimeout(holdTimer); holdTimer = null; $('backBtn').classList.remove('holding'); }
 function beginHold() {
   if (!session || holdTimer) return;
+  cancelStartHold();
   $('backBtn').classList.add('holding');
   holdTimer = setTimeout(exitSession, 2000);
 }
 function exitSession() {
   const s = session; if (!s) return;
-  session = null; cancelHold(); s.controller.abort(); clearTimeout(s.pollTimer); closeRTC(s);
+  session = null; cancelHold(); cancelStartHold(); s.controller.abort(); closeRTC(s);
   s.stream?.getTracks().forEach(t => t.stop()); s.wake?.release().catch(() => {});
   $('blackScreen').hidden = true; $('settings').hidden = false; $('settings').inert = false;
   document.body.classList.remove('active-session');
@@ -272,13 +272,14 @@ function exitSession() {
 }
 
 try {
-  config = JSON.parse(read(STORAGE) || 'null') || {
+  config = JSON.parse(read(STORAGE) || read('appmaz_audio_v1') || 'null') || {
     user:'', key:read('openai_api_key') || '', stop:read('stop_phrase') || 'parar transcripción', delay:'low',
     lists:read('audio_prompt') ? [{id:crypto.randomUUID(),name:'Mi primera lista',prompt:read('audio_prompt')}] : []
   };
   if (!Array.isArray(config.lists)) throw new Error('Las listas guardadas no tienen un formato válido.');
-  pending = JSON.parse(read('appmaz_pending_v1') || 'null');
-  for (const [id,key] of [['userCode','user'],['apiKey','key'],['stopPhrase','stop'],['delay','delay']]) {
+  if (!['gpt-5-nano', 'gpt-4.1-mini'].includes(config.model)) config.model = 'gpt-5-nano';
+  pending = JSON.parse(read(PENDING_STORAGE) || 'null');
+  for (const [id,key] of [['userCode','user'],['apiKey','key'],['stopPhrase','stop'],['delay','delay'],['languageModel','model']]) {
     $(id).value = config[key] || '';
     $(id).addEventListener('input', () => { try { saveSettings(); } catch { status('No se puede guardar en este navegador. Comprueba su almacenamiento.'); } });
   }
@@ -296,6 +297,7 @@ $('editor').addEventListener('submit', event => {
   try { save(); $('editor').hidden = true; renderLists(); status('Lista guardada.'); } catch (e) { status(errorText(e)); }
 });
 $('backBtn').addEventListener('pointerdown', e => {
+  e.stopPropagation(); cancelStartHold();
   if (!e.isPrimary || e.button !== 0) return;
   e.preventDefault(); $('backBtn').setPointerCapture(e.pointerId); beginHold();
 });
@@ -308,11 +310,11 @@ $('backBtn').addEventListener('contextmenu', e => e.preventDefault());
 $('backBtn').addEventListener('keydown', e => { if ([' ','Enter'].includes(e.key)) { e.preventDefault(); if (!e.repeat) beginHold(); } });
 $('backBtn').addEventListener('keyup', cancelHold);
 $('backBtn').addEventListener('blur', cancelHold);
-window.addEventListener('blur', cancelHold);
+window.addEventListener('blur', () => { cancelHold(); cancelStartHold(); });
 window.addEventListener('popstate', () => { if (session?.history) history.pushState({appmazSession:true}, ''); });
 window.addEventListener('pagehide', () => { if (session) { session.history = false; exitSession(); } });
 document.addEventListener('visibilitychange', () => {
-  cancelHold();
+  cancelHold(); cancelStartHold();
   if (!session) return;
   if (document.visibilityState === 'visible') void wake(session);
   else if (['listening','connecting'].includes(session.state)) fail(session, new Error('La app dejó de estar en primer plano. Vuelve a elegir la lista.'));
@@ -321,14 +323,51 @@ $('retrySend').addEventListener('click', async () => {
   if (!pending || sendingPending || session) return;
   sendingPending = true; showPending(); renderLists();
   try {
-    const user = pending.user; await deliver(pending); keepPending(null);
-    localStorage.setItem('appmaz_consumed_' + user, '0'); status('Respuesta enviada y comprobada. Ya puedes elegir una lista.');
+    await deliver(pending); keepPending(null);
+    status('Respuesta enviada y comprobada. Ya puedes elegir una lista.');
   } catch (error) { status(errorText(error)); }
   finally { sendingPending = false; showPending(); renderLists(); }
 });
 $('discardPending').addEventListener('click', () => {
   if (!sendingPending && confirm('¿Descartar la respuesta pendiente sin enviarla?')) {
-    try { keepPending(null); status('Respuesta descartada. Una orden ya atendida no se ejecutará de nuevo hasta que cambie el contenido remoto.'); } catch(e) { status(errorText(e)); }
+    try { keepPending(null); status('Respuesta descartada. Ya puedes elegir una lista.'); } catch(e) { status(errorText(e)); }
   }
 });
 if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('./sw.js').catch(() => status('No se pudo preparar la instalación sin conexión. La app puede seguir funcionando con Internet.'));
+
+function cancelStartHold() {
+  if (startHold) clearTimeout(startHold.timer);
+  startHold = null;
+}
+function beginStartHold(pointerId = null, x = 0, y = 0) {
+  const s = session;
+  if (!s || s.state !== 'waiting' || holdTimer || startHold || document.visibilityState !== 'visible') return;
+  const gesture = {pointerId, x, y, timer:null};
+  startHold = gesture;
+  gesture.timer = setTimeout(() => {
+    if (startHold !== gesture) return;
+    cancelStartHold();
+    if (!current(s) || s.state !== 'waiting' || document.visibilityState !== 'visible') return;
+    void startAudio(s).catch(error => fail(s, error));
+  }, 1000);
+}
+$('blackScreen').addEventListener('pointerdown', e => {
+  if (e.target.closest('#backBtn')) return;
+  if (!e.isPrimary) { cancelStartHold(); return; }
+  if (e.button !== 0) return;
+  // Keep result scrolling native. Moving a finger cancels the listening gesture.
+  beginStartHold(e.pointerId, e.clientX, e.clientY);
+});
+window.addEventListener('pointermove', e => {
+  if (startHold?.pointerId !== e.pointerId) return;
+  if (Math.hypot(e.clientX - startHold.x, e.clientY - startHold.y) > 12) cancelStartHold();
+});
+for (const type of ['pointerup','pointercancel','lostpointercapture']) window.addEventListener(type, e => {
+  if (startHold?.pointerId === e.pointerId) cancelStartHold();
+});
+$('blackScreen').addEventListener('contextmenu', e => e.preventDefault());
+$('startSurface').addEventListener('keydown', e => {
+  if ([' ','Enter'].includes(e.key)) { e.preventDefault(); if (!e.repeat) beginStartHold(); }
+});
+$('startSurface').addEventListener('keyup', cancelStartHold);
+$('startSurface').addEventListener('blur', cancelStartHold);

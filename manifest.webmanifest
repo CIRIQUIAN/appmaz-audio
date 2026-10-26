@@ -1,8 +1,8 @@
 {
   "id": "./",
-  "name": "Appmaz Audio",
-  "short_name": "Appmaz",
-  "description": "Listas de prompts y audio activado por WIKISTOP.",
+  "name": "Appmaz Audio Táctil",
+  "short_name": "Appmaz Táctil",
+  "description": "Mantén la pantalla pulsada un segundo para escuchar y ver la respuesta final.",
   "lang": "es",
   "start_url": "./index.html",
   "scope": "./",

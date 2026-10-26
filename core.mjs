@@ -53,3 +53,44 @@ export function extractAnswer(data) {
   if (!answer.trim()) throw new Error('El modelo no devolvió una respuesta de texto.');
   return answer.trim();
 }
+
+// Send first; only read after a write attempt. A slow request must not delay
+// subsequent attempts or extend the ten-second delivery window.
+export function confirmDelivery(answer, {write, read, signal, onAttempt = () => {},
+  now = Date.now, setTimer = setTimeout, clearTimer = clearTimeout}) {
+  return new Promise((resolve, reject) => {
+    const controller = new AbortController();
+    const started = now();
+    let finished = false, nextTimer, deadlineTimer, attempt = 0;
+    const end = error => {
+      if (finished) return;
+      finished = true;
+      clearTimer(nextTimer); clearTimer(deadlineTimer);
+      signal?.removeEventListener('abort', cancel);
+      controller.abort();
+      if (error) reject(error); else resolve();
+    };
+    const cancel = () => end(Object.assign(new Error('Envío cancelado.'), {name:'AbortError'}));
+    if (signal?.aborted) { cancel(); return; }
+    signal?.addEventListener('abort', cancel, {once:true});
+    deadlineTimer = setTimer(() => end(new Error('No se pudo confirmar el resultado en 10 segundos. La respuesta queda pendiente para reintentar.')), 10000);
+    const tick = () => {
+      if (finished) return;
+      const elapsed = now() - started;
+      if (elapsed >= 10000) return;
+      const number = ++attempt;
+      onAttempt(number);
+      // Schedule before awaiting network: attempts start at 0, 1, ... 9 seconds.
+      nextTimer = setTimer(tick, Math.max(0, started + number * 1000 - now()));
+      void (async () => {
+        try { await write(controller.signal); } catch { /* A write can arrive even if its response is lost. */ }
+        if (finished) return;
+        try {
+          const saved = await read(controller.signal);
+          if (!finished && saved === answer) end();
+        } catch { /* A failed check is retried within the same window. */ }
+      })();
+    };
+    tick();
+  });
+}

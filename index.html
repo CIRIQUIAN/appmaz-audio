@@ -6,9 +6,9 @@
 <meta name="theme-color" content="#000000">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
-<meta name="apple-mobile-web-app-title" content="Appmaz Audio">
+<meta name="apple-mobile-web-app-title" content="Appmaz Táctil">
 <meta name="referrer" content="no-referrer">
-<title>Appmaz Audio</title>
+<title>Appmaz Audio · Táctil</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="apple-touch-icon" href="./icon-180.png">
 <link rel="icon" href="./icon-192.png">
@@ -17,7 +17,7 @@
 </head>
 <body>
 <main id="settings">
-  <header><span class="eyebrow">AUDIO · LISTAS · RESPUESTAS</span><h1>Appmaz Audio<span>.</span></h1><p>Elige una lista. El resto empieza con WIKISTOP.</p></header>
+  <header><span class="eyebrow">VERSIÓN TÁCTIL · AUDIO · LISTAS</span><h1>Appmaz Audio<span>.</span></h1><p>Elige una lista. Mantén la pantalla negra pulsada un segundo para escuchar.</p></header>
   <section aria-labelledby="accountTitle">
     <h2 id="accountTitle">Tu configuración</h2>
     <div class="columns">
@@ -26,10 +26,12 @@
     </div>
     <label for="stopPhrase">Frase de detención</label><input id="stopPhrase" placeholder="parar transcripción">
     <label for="delay">Latencia / precisión</label><select id="delay"><option value="minimal">Minimal · más rápido</option><option value="low">Low · rápido</option><option value="medium">Medium · equilibrado</option><option value="high">High · más precisión</option><option value="xhigh">XHigh · máxima precisión</option></select>
+    <label for="languageModel">Modelo de lenguaje</label><select id="languageModel"><option value="gpt-5-nano">GPT-5 Nano · razonamiento mínimo</option><option value="gpt-4.1-mini">GPT-4.1 mini · sin fase de razonamiento</option></select>
+    <small>Se guarda tu elección. Puedes comparar ambos con el mismo prompt; el tiempo de respuesta aparece en Última sesión.</small>
   </section>
   <section aria-labelledby="listsTitle">
     <div class="section-head"><h2 id="listsTitle">Tus listas</h2><button id="newList" class="secondary">+ Nueva lista</button></div>
-    <p class="hint">Cada lista tiene su propio prompt. Pulsa «Usar lista» para entrar en la pantalla negra.</p>
+    <p class="hint">Cada lista tiene su propio prompt. «Usar lista» abre la pantalla negra sin escuchar. La respuesta final aparecerá allí y se enviará a Appmaz. Para otra escucha, mantén la pantalla pulsada un segundo.</p>
     <div id="lists"></div>
     <form id="editor" hidden>
       <h3 id="editorTitle">Nueva lista</h3>
@@ -44,8 +46,11 @@
   <details><summary>Instalar en el móvil</summary><p>Abre esta web por HTTPS. En iPhone: Safari → Compartir → Añadir a pantalla de inicio. En Android: menú de Chrome → Instalar aplicación o Añadir a pantalla de inicio.</p><p>Mantén la app abierta. La pantalla negra es parte de la app; no bloquea el teléfono. Para volver, mantén pulsado el botón durante dos segundos.</p><p>El navegador decide si recuerda el permiso de micrófono. Mientras esperas, la pista de audio permanece desactivada; el sistema puede seguir mostrando su indicador de micrófono.</p></details>
   <footer>Guardado en este dispositivo · Necesita conexión a Internet</footer>
 </main>
-<div id="blackScreen" hidden role="dialog" aria-modal="true" aria-label="Sesión de audio. Mantén Volver pulsado dos segundos para salir.">
+<div id="blackScreen" hidden role="dialog" aria-modal="true" aria-label="Mantén la pantalla pulsada un segundo para escuchar, o Volver dos segundos para salir.">
+  <button id="startSurface" aria-label="Mantén pulsado un segundo para empezar a escuchar"></button>
   <p id="listeningLabel" hidden role="status">Escuchando</p>
+  <div id="blackResult" hidden role="status" aria-live="polite" tabindex="0" aria-label="Respuesta final"></div>
+  <p id="screenMessage" role="status" aria-live="polite"></p>
   <button id="backBtn" aria-label="Volver: mantener pulsado dos segundos">Volver <span>mantén 2 segundos</span></button>
 </div>
 </body>
